@@ -27,8 +27,14 @@ DICE_EMOJIS = {
     10: "<:c10:1338257568929288273>"
 }
 
-def roll_dice(pool, difficulty, mega_dice=0, auto_successes=0):
-    regular_rolls = [random.randint(1, 10) for _ in range(pool)]
+def roll_dice(pool, difficulty, mega_dice=0, auto_successes=0, specialty=False):
+    regular_rolls = []
+    for _ in range(pool):
+        roll = random.randint(1, 10)
+        regular_rolls.append(roll)
+        if specialty and roll == 10:
+            regular_rolls.append(random.randint(1, 10))
+    
     mega_rolls = [random.randint(1, 10) for _ in range(mega_dice)]
     
     regular_successes = sum(1 for r in regular_rolls if r >= difficulty)
@@ -40,12 +46,12 @@ def roll_dice(pool, difficulty, mega_dice=0, auto_successes=0):
     return regular_rolls, mega_rolls, total_successes, botches
 
 @tree.command(name="ab", description="Rolls dice for Aberrant (d10 system)")
-async def roll(interaction: discord.Interaction, pool: int, difficulty: int = 7, mega_dice: int = 0, auto_successes: int = 0):
+async def roll(interaction: discord.Interaction, pool: int, difficulty: int = 7, mega_dice: int = 0, auto_successes: int = 0, specialty: bool = False):
     if pool < 1 or difficulty < 2 or difficulty > 10:
         await interaction.response.send_message("Invalid input. Make sure pool is at least 1 and difficulty is between 2 and 10.")
         return
     
-    regular_rolls, mega_rolls, total_successes, botches = roll_dice(pool, difficulty, mega_dice, auto_successes)
+    regular_rolls, mega_rolls, total_successes, botches = roll_dice(pool, difficulty, mega_dice, auto_successes, specialty)
     
     emoji_regular = [DICE_EMOJIS.get(r, str(r)) for r in regular_rolls]
     emoji_mega = [DICE_EMOJIS.get(r, str(r)) for r in mega_rolls]
