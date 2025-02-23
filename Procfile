@@ -1,1 +1,1 @@
-worker: python quantum-dice-roller.py
+worker: python quantum dice roller.py
