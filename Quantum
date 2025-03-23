@@ -27,34 +27,33 @@ DICE_EMOJIS = {
     10: "<:c10:1338257568929288273>"
 }
 
-def roll_dice(pool, difficulty, mega_dice=0, auto_successes=0, specialty=False):
+# Dictionary to hold initiative data (including actions)
+initiative_data = {}
+
+def roll_dice(pool, difficulty, modifier=0, specialty=False, auto_successes=0):
     regular_rolls = []
     for _ in range(pool):
-        roll = random.randint(1, 10)
+        roll = random.randint(1, 10) + modifier
         regular_rolls.append(roll)
         if specialty and roll == 10:
             regular_rolls.append(random.randint(1, 10))
     
-    mega_rolls = [random.randint(1, 10) for _ in range(mega_dice)]
-    
     regular_successes = sum(1 for r in regular_rolls if r >= difficulty)
-    mega_successes = sum(2 if r in [7, 8, 9] else 3 if r == 10 else 0 for r in mega_rolls)
-    total_successes = regular_successes + mega_successes + auto_successes
+    total_successes = regular_successes + auto_successes
     
-    botches = (regular_rolls.count(1) + mega_rolls.count(1)) if total_successes == 0 else 0
+    botches = regular_rolls.count(1) if total_successes == 0 else 0
     
-    return regular_rolls, mega_rolls, total_successes, botches
+    return regular_rolls, total_successes, botches
 
 @tree.command(name="ab", description="Rolls dice for Aberrant (d10 system)")
-async def roll(interaction: discord.Interaction, pool: int, difficulty: int = 7, mega_dice: int = 0, auto_successes: int = 0, specialty: bool = False):
+async def roll(interaction: discord.Interaction, pool: int, difficulty: int = 7, modifier: int = 0, auto_successes: int = 0, specialty: bool = False, comment: str = None):
     if pool < 1 or difficulty < 2 or difficulty > 10:
         await interaction.response.send_message("Invalid input. Make sure pool is at least 1 and difficulty is between 2 and 10.")
         return
     
-    regular_rolls, mega_rolls, total_successes, botches = roll_dice(pool, difficulty, mega_dice, auto_successes, specialty)
+    regular_rolls, total_successes, botches = roll_dice(pool, difficulty, modifier, specialty, auto_successes)
     
     emoji_regular = [DICE_EMOJIS.get(r, str(r)) for r in regular_rolls]
-    emoji_mega = [DICE_EMOJIS.get(r, str(r)) for r in mega_rolls]
     
     embed_color = discord.Color.green() if total_successes > 0 else discord.Color.red()
     embed_title = "Aberrant Dice Roll"
@@ -67,11 +66,57 @@ async def roll(interaction: discord.Interaction, pool: int, difficulty: int = 7,
     
     embed = discord.Embed(title=embed_title, color=embed_color, description=embed_description)
     embed.add_field(name="Regular Rolls", value=" ".join(emoji_regular) if emoji_regular else "None", inline=False)
-    embed.add_field(name="Mega Rolls", value=" ".join(emoji_mega) if emoji_mega else "None", inline=False)
     embed.add_field(name="Successes", value=str(total_successes), inline=True)
     embed.add_field(name="Botches", value=str(botches), inline=True)
     
+    if comment:
+        embed.add_field(name="Comment", value=comment, inline=False)
+    
     await interaction.response.send_message(embed=embed)
+
+@tree.command(name="init", description="Track initiative rolls.")
+async def initiative(interaction: discord.Interaction, name: str = None, modifier: int = 0):
+    # Use the user's name if no name is provided
+    character_name = name or interaction.user.name
+    
+    # Simulate rolling a d10 and adding the modifier
+    roll = random.randint(1, 10) + modifier
+    
+    # Store or update initiative in a dictionary
+    initiative_data[character_name] = {"roll": roll, "action": None}
+    
+    await interaction.response.send_message(f"{character_name} rolled a {roll} for initiative!")
+
+@tree.command(name="dec", description="Declare your action for your initiative score.")
+async def declare_action(interaction: discord.Interaction, action: str):
+    character_name = interaction.user.name
+    
+    # Check if the character exists in the initiative data
+    if character_name in initiative_data:
+        initiative_data[character_name]["action"] = action
+        await interaction.response.send_message(f"{character_name} declared the action: {action}")
+    else:
+        await interaction.response.send_message(f"{character_name} has not rolled initiative yet. Please roll initiative first using `/init`.")
+
+@tree.command(name="reroll", description="Reroll initiative for all characters using their current modifier.")
+async def reroll(interaction: discord.Interaction):
+    for character_name, data in initiative_data.items():
+        roll = random.randint(1, 10) + data["roll"]  # Recalculate using the modifier stored
+        initiative_data[character_name]["roll"] = roll
+        await interaction.response.send_message(f"{character_name} rerolled for initiative and got a {roll}!")
+
+@tree.command(name="view_initiative", description="View the current initiative list with declared actions.")
+async def view_initiative(interaction: discord.Interaction):
+    if not initiative_data:
+        await interaction.response.send_message("No one has rolled initiative yet.")
+        return
+    
+    initiative_list = []
+    for character_name, data in sorted(initiative_data.items(), key=lambda item: item[1]["roll"], reverse=True):
+        action = data["action"] or "No action declared"
+        initiative_list.append(f"{character_name}: {data['roll']} - Action: {action}")
+    
+    await interaction.response.send_message("\n".join(initiative_list))
 
 @bot.event
 async def on_ready():
